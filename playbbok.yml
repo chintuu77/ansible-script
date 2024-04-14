@@ -1,0 +1,166 @@
+
+---
+- hosts: localhost
+  become: yes
+  tasks:
+
+##VPC-creation
+    - ec2_vpc_net:
+        aws_access_key: enter-your-key
+        aws_secret_key: enter-your-key
+        cidr_block: "10.0.0.0/16"
+        name: vivek-vpc
+        region: "us-east-2"
+        state: "present"  # to delete VPC then replace 'present' with 'absent'
+      register: vpc_result
+
+##IGW
+    - ec2_vpc_igw:
+        aws_access_key: enter-your-key
+        aws_secret_key: enter-your-key
+        vpc_id: "{{ vpc_result.vpc.id }}"
+        region: "us-east-2"
+        state: "present"
+        tags:
+          Name: vivek-igw
+      register: igw_result
+
+##Public-subnet
+    - ec2_vpc_subnet:
+        aws_access_key: enter-your-key
+        aws_secret_key: enter-your-key
+        vpc_id: "{{ vpc_result.vpc.id }}"
+        region: us-east-2
+        az: us-east-2a  # az is the availability zone
+        state: "present"
+        cidr: 10.0.0.0/20
+        # enable public ip
+        map_public: yes
+        resource_tags:
+          Name: vivek-pub
+      register: pubsubnet_result
+
+##Private-subnet
+    - ec2_vpc_subnet:
+        aws_access_key: enter-your-key
+        aws_secret_key: enter-your-key
+        vpc_id: "{{ vpc_result.vpc.id }}"
+        region: "us-east-2"
+        az: "us-east-2a"
+        state: "present"
+        cidr: "10.0.16.0/20"
+        map_public: no
+        resource_tags:
+          Name: vivek-pvt
+      register: pvtsubnet_result
+
+##Route-table-public
+    - ec2_vpc_route_table:
+        aws_access_key: enter-your-key
+        aws_secret_key: enter-your-key
+        vpc_id: "{{ vpc_result.vpc.id }}"
+        region: "us-east-2"
+        state: "present"
+        tags:
+          Name: "vivek-pub-rt"
+        subnets: ["{{ pubsubnet_result.subnet.id }}"]
+        # create routes
+        routes:
+          - dest: "0.0.0.0/0"
+            gateway_id: "{{ igw_result.gateway_id }}"
+      register: public_route_table
+
+##Route-table-private
+    - ec2_vpc_route_table:
+        aws_access_key: enter-your-key
+        aws_secret_key: enter-your-key
+        vpc_id: "{{ vpc_result.vpc.id }}"
+        region: "us-east-2"
+        state: "present"
+        tags:
+          Name: "vivek-pvt-rt"
+        subnets: ["{{ pvtsubnet_result.subnet.id }}"]
+      register: private_route_table
+
+##SG
+    - ec2_group:
+        aws_access_key: enter-your-key
+        aws_secret_key: enter-your-key
+        vpc_id: "{{ vpc_result.vpc.id }}"
+        region: "us-east-2"
+        state: "present"
+        name: "vivek-sg"
+        description: "allow"
+        tags:
+          Name: "vivek-sg"
+        rules:
+          - proto: "all"
+            cidr_ip: "0.0.0.0/0"
+            rule_desc: "allow all traffic"
+      register: security_group_results
+
+##ELB
+    - ec2_elb_lb:
+        aws_access_key: enter-your-key
+        aws_secret_key: enter-your-key
+        name: "vivek-elb"
+        state: present
+        region: "us-east-2"
+        security_group_names: ["vivek-sg"]
+        subnets: ["{{ pubsubnet_result.subnet.id }}"]
+        listeners:
+          - protocol: HTTP
+            load_balancer_port: 80
+            instance_port: 80
+
+##Launch configuration
+    - name: Create Launch Configuration
+      ec2_lc:
+        aws_access_key: enter-your-key
+        aws_secret_key: enter-your-key
+        name: "vivek-launch-config"
+        image_id: "ami-00cda30cf72311684"
+        instance_type: "t2.micro"
+        key_name: "WP"
+        security_groups: ["vivek-sg"]
+        region: "us-east-2"
+        state: present
+
+
+##ASG
+    - ec2_asg:
+        aws_access_key: enter-your-key
+        aws_secret_key: enter-your-key
+        name: "vivek-asg"
+        launch_config_name: "vivek-launch-config"
+        min_size: 1
+        max_size: 3
+        desired_capacity: 2
+        region: "us-east-2"
+        vpc_zone_identifier: "{{ pubsubnet_result.subnet.id }}"
+        tags:
+          - key: Name
+            value: vivek-asg
+            propagate_at_launch: true
+
+##EC2-Instance
+    - ec2:
+        image: ami-00cda30cf72311684
+        instance_type: t2.micro
+        region: us-east-2
+        wait: yes
+        count: 1
+        state: "present"
+        vpc_subnet_id: "{{ pubsubnet_result.subnet.id }}"
+        assign_public_ip: yes
+        group_id: "{{ security_group_results.group_id }}"
+        aws_access_key: enter-your-key
+        aws_secret_key: enter-your-key
+        instance_tags:
+          Name: vivek-Ec2
+        user_data: |
+          #!/bin/bash
+          sudo yum -y install git httpd
+          sudo systemctl start httpd
+          sudo systemctl enable httpd
+          git clone https://github.com/chintuu77/food.git /var/www/html/
