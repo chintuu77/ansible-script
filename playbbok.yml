@@ -9,7 +9,7 @@
         aws_secret_key: enter-your-key
         cidr_block: "10.0.0.0/16"
         name: vivek-vpc
-        region: "us-east-2"
+        region: "us-east-1"
         state: "present"  # to delete VPC then replace 'present' with 'absent'
       register: vpc_result
 
@@ -18,7 +18,7 @@
         aws_access_key: enter-your-key
         aws_secret_key: enter-your-key
         vpc_id: "{{ vpc_result.vpc.id }}"
-        region: "us-east-2"
+        region: "us-east-1"
         state: "present"
         tags:
           Name: vivek-igw
@@ -29,8 +29,8 @@
         aws_access_key: enter-your-key
         aws_secret_key: enter-your-key
         vpc_id: "{{ vpc_result.vpc.id }}"
-        region: us-east-2
-        az: us-east-2a  # az is the availability zone
+        region: us-east-1
+        az: us-east-1a  # az is the availability zone
         state: "present"
         cidr: 10.0.0.0/20
         # enable public ip
@@ -44,8 +44,8 @@
         aws_access_key: enter-your-key
         aws_secret_key: enter-your-key
         vpc_id: "{{ vpc_result.vpc.id }}"
-        region: "us-east-2"
-        az: "us-east-2a"
+        region: "us-east-1"
+        az: "us-east-1a"
         state: "present"
         cidr: "10.0.16.0/20"
         map_public: no
@@ -58,7 +58,7 @@
         aws_access_key: enter-your-key
         aws_secret_key: enter-your-key
         vpc_id: "{{ vpc_result.vpc.id }}"
-        region: "us-east-2"
+        region: "us-east-1"
         state: "present"
         tags:
           Name: "vivek-pub-rt"
@@ -74,7 +74,7 @@
         aws_access_key: enter-your-key
         aws_secret_key: enter-your-key
         vpc_id: "{{ vpc_result.vpc.id }}"
-        region: "us-east-2"
+        region: "us-east-1"
         state: "present"
         tags:
           Name: "vivek-pvt-rt"
@@ -86,7 +86,7 @@
         aws_access_key: enter-your-key
         aws_secret_key: enter-your-key
         vpc_id: "{{ vpc_result.vpc.id }}"
-        region: "us-east-2"
+        region: "us-east-1"
         state: "present"
         name: "vivek-sg"
         description: "allow"
@@ -104,7 +104,7 @@
         aws_secret_key: enter-your-key
         name: "vivek-elb"
         state: present
-        region: "us-east-2"
+        region: "us-east-1"
         security_group_names: ["vivek-sg"]
         subnets: ["{{ pubsubnet_result.subnet.id }}"]
         listeners:
@@ -122,7 +122,7 @@
         instance_type: "t2.micro"
         key_name: "WP"
         security_groups: ["vivek-sg"]
-        region: "us-east-2"
+        region: "us-east-1"
         state: present
 
 
@@ -135,7 +135,7 @@
         min_size: 1
         max_size: 3
         desired_capacity: 2
-        region: "us-east-2"
+        region: "us-east-1"
         vpc_zone_identifier: "{{ pubsubnet_result.subnet.id }}"
         tags:
           - key: Name
@@ -146,7 +146,7 @@
     - ec2:
         image: ami-00cda30cf72311684
         instance_type: t2.micro
-        region: us-east-2
+        region: us-east-1
         wait: yes
         count: 1
         state: "present"
