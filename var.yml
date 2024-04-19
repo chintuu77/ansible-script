@@ -23,6 +23,3 @@
     asg_name: "vivek-asg"
     launch_config_name: "vivek-launch-configuration"
     instance_type: "t2.micro"
-    min_size: 1
-    max_size: 5
-    desired_capacity: 2
