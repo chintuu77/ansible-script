@@ -1,0 +1,208 @@
+- hosts: localhost
+  become: yes
+  gather_facts: false
+
+  vars:
+    aws_access_key: "enter-key"
+    aws_secret_key: "enter-key"
+    title: "ARTH"
+    vpc_name: "vivek_vpc"
+    igw_name: "vivek_igw"
+    pubsubnet_name: "vivek_pub"
+    pubroute_table_name: "vivek_pub_rt"
+    pvtroute_table_name: "vivek_pvt_rt"
+    pvtsubnet_name: "vivek_pvt"
+    security_group_name: "vivek_sg"
+    vpc_cidr_block: "11.0.0.0/16"
+    pubsubnet_cidr_block: "11.0.1.0/24"
+    pvtsubnet_cidr_block: "11.0.2.0/24"
+    destination_cidr_block: "0.0.0.0/0"
+    port22_cidr_block: "0.0.0.0/0"
+    region: "us-east-2"
+    pubzone: "us-east-2a"
+    pvtzone: "us-east-2b"
+    image_id: "ami-00cda30cf72311684"
+    type: "t2.micro"
+    instance_name: "vivek-ec"
+
+  tasks:
+#VPC creation
+    - name: Create VPC
+      ec2_vpc_net:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        cidr_block: "{{ vpc_cidr_block }}"
+        name: "{{ vpc_name }}"
+        region: "{{ region }}"
+        dns_support: yes
+        dns_hostnames: yes
+        tenancy: default
+        state: present
+      register: vpc_result
+
+#IGW creation
+    - name: Create Internet Gateway
+      ec2_vpc_igw:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ vpc_result.vpc.id }}"
+        region: "{{ region }}"
+        state: present
+        tags:
+          Name: "{{ igw_name }}"
+      register: igw_result
+
+#Public-subnet creation
+    - name: Create VPC Public Subnet
+      ec2_vpc_subnet:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ vpc_result.vpc.id }}"
+        region: "{{ region }}"
+        az: "{{ pubzone }}"
+        state: present
+        cidr: "{{ pubsubnet_cidr_block }}"
+        map_public: yes
+        resource_tags:
+          Name: "{{ pubsubnet_name }}"
+      register: pubsubnet_result
+
+#Private-subnet creation
+    - name: Create VPC Private Subnet
+      ec2_vpc_subnet:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ vpc_result.vpc.id }}"
+        region: "{{ region }}"
+        az: "{{ pvtzone }}"
+        state: present
+        cidr: "{{ pvtsubnet_cidr_block }}"
+        map_public: no
+        resource_tags:
+          Name: "{{ pvtsubnet_name }}"
+      register: pvtsubnet_result
+
+#public-Route table
+    - name: Create VPC Public Route Table
+      ec2_vpc_route_table:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ vpc_result.vpc.id }}"
+        region: "{{ region }}"
+        state: present
+        tags:
+          Name: "{{ pubroute_table_name }}"
+        subnets:
+          - "{{ pubsubnet_result.subnet.id }}"
+        routes:
+          - dest: 0.0.0.0/0
+            gateway_id: "{{ igw_result.gateway_id }}"
+      register: public_route_table
+
+#Private-Route table
+    - name: Create VPC Private Route Table
+      ec2_vpc_route_table:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ vpc_result.vpc.id }}"
+        region: "{{ region }}"
+        state: present
+        tags:
+          Name: "{{ pvtroute_table_name }}"
+        subnets:
+          - "{{ pvtsubnet_result.subnet.id }}"
+      register: private_route_table
+
+#Security-group
+    - name: Create VPC Security Group
+      ec2_group:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ vpc_result.vpc.id }}"
+        region: "{{ region }}"
+        state: present
+        name: "{{ security_group_name }}"
+        description: allow
+        tags:
+          Name: vivek-sg
+        rules:
+          - proto: all
+            cidr_ip: 0.0.0.0/0
+            rule_desc: allow all traffic
+      register: security_group_results
+
+#EC2 Instance
+    - name: Launch EC2 Instance
+      ec2:
+        image: "{{ image_id }}"
+        instance_type: "{{ type }}"
+        region: "{{ region }}"
+        wait: yes
+        count: 1
+        state: present
+        vpc_subnet_id: "{{ pubsubnet_result.subnet.id }}"
+        assign_public_ip: yes
+        group_id: "{{ security_group_results.group_id }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        instance_tags:
+          Name: "{{ instance_name }}"
+        user_data: |
+          #!/bin/bash
+          sudo yum -y install git httpd
+          sudo systemctl start httpd
+          sudo systemctl enable httpd
+          git clone https://github.com/chintuu77/ecomm.git /var/www/html/
+
+
+##ELB creation
+    - name: Create ELB
+      ec2_elb_lb:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        name: vivek-elb
+        region: "{{ region }}"
+        state: present
+        subnets:
+          - "{{ pubsubnet_result.subnet.id }}"
+        security_group_ids:
+          - "{{ security_group_results.group_id }}"
+        listeners:
+          - protocol: HTTP
+            load_balancer_port: 80
+            instance_protocol: HTTP
+            instance_port: 80
+        tags:
+          Name: vivek-elb
+
+#Launch configuration
+    - name: Create Launch Configuration
+      ec2_lc:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        name: vivek-launch-config
+        image_id: "{{ image_id }}"
+        instance_type: "{{ type }}"
+        region: "{{ region }}"
+        key_name: "AN"
+        security_groups:
+          - "{{ security_group_name }}"
+        instance_monitoring: yes
+
+#ASG creation
+    - name: Create Auto Scaling Group
+      ec2_asg:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ region }}"
+        name: vivek-asg
+        launch_config_name: vivek-launch-config
+        min_size: 1
+        max_size: 3
+        desired_capacity: 2
+        vpc_zone_identifier: "{{ pubsubnet_result.subnet.id }}"
+        load_balancers: ['vivek-elb']
+        tags:
+          - key: Name
+            value: my-instance
+            propagate_at_launch: true
