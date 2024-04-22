@@ -1,0 +1,138 @@
+---
+- name: Delete AWS resources
+  hosts: localhost
+  gather_facts: no
+  tasks:
+
+## Detach instances from Security Group
+    - name: Get instances attached to security group
+      ec2_instance_info:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        filters:
+          group-id: "sg-03d60b5870cd3f76a"
+      register: instances_info
+
+    - name: Detach instances from security group
+      ec2_instance:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        instance_ids: "{{ item.instance_id }}"
+        state: stopped  # You may need to stop the instances before detaching them from the security group
+        wait: true
+      loop: "{{ instances_info.instances }}"
+
+## Delete instances
+    - name: Get information about the instances
+      ec2_instance_facts:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        filters:
+          tag:Name: "vivek-EC"
+      register: ec2_instances
+
+    - name: Terminate instances
+      ec2_instance:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        instance_ids: "{{ item.instance_id }}"
+        state: absent
+      loop: "{{ ec2_instances.instances }}"
+
+## Delete Auto Scaling Group
+    - name: Delete Auto Scaling Group
+      ec2_asg:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        name: "vivek-asg"
+        state: absent
+
+## Delete Launch Configuration
+    - name: Delete Launch Configuration
+      ec2_lc:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        name: "vivek-launch-config"
+        state: absent
+
+## Delete ELB
+    - name: Delete ELB
+      ec2_elb_lb:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        name: "vivek-elb"
+        state: absent
+
+
+## Delete Security Group
+    - name: Delete Security Group
+      ec2_group:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        name: "vivek-sg"
+        state: absent
+
+## Delete Internet Gateway
+    - name: Detach and Delete Internet Gateway
+      ec2_vpc_igw:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        state: absent
+        vpc_id: "vpc-02a38ec8f4f8293f5"
+
+## Delete Subnets
+    - name: Delete Public Subnet
+      ec2_vpc_subnet:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        state: absent
+        cidr: "11.0.1.0/24"
+        vpc_id: "vpc-02a38ec8f4f8293f5"
+
+    - name: Delete Private Subnet
+      ec2_vpc_subnet:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        state: absent
+        cidr: "11.0.2.0/24"
+        vpc_id: "vpc-02a38ec8f4f8293f5"
+
+## Delete Route Tables
+    - name: Delete Private Route Table
+      ec2_vpc_route_table:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        state: absent
+        route_table_id: "rtb-06200fc67a3326d33"
+        vpc_id: "vpc-02a38ec8f4f8293f5"
+
+    - name: Delete Public Route Table
+      ec2_vpc_route_table:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        state: absent
+        route_table_id: "rtb-0311d90fb41cd0ace"
+        vpc_id: "vpc-02a38ec8f4f8293f5"
+
+## Delete VPC
+    - name: Delete VPC
+      ec2_vpc_net:
+        aws_access_key: "enter-key"
+        aws_secret_key: "enter-key"
+        region: "ap-south-1"
+        state: absent
+        name: "vivek_vpc"
+        cidr_block: "11.0.0.0/16"
